@@ -1,0 +1,4 @@
+[server]
+# Disables the file-watcher that scans installed packages (like transformers)
+# and floods the log with "No module named 'torchvision'" warnings.
+fileWatcherType = "none"

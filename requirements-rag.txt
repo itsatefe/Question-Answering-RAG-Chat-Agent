@@ -1,0 +1,8 @@
+langchain>=0.3
+langchain-community>=0.3
+langchain-chroma>=0.1
+langchain-huggingface>=0.1
+sentence-transformers>=3.0
+chromadb>=0.5
+pypdf>=4.0
+streamlit>=1.43
