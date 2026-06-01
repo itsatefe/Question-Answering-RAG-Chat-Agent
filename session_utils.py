@@ -1,5 +1,3 @@
-"""Utility functions for working with chat sessions on the deployed agent."""
-
 import asyncio
 from typing import Any, Dict, Iterable, List
 
@@ -102,7 +100,6 @@ def send_message(remote_agent, user_id: str, session_id: str, message: str, verb
 
 
 def send_chat(remote_agent, user_id: str, session_id: str, messages: Iterable[str], verbose: bool = False) -> List[str]:
-    """Convenience helper to send multiple messages in sequence."""
     responses: List[str] = []
     for message in messages:
         responses.append(send_message(remote_agent, user_id, session_id, message, verbose=verbose))

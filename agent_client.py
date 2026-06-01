@@ -1,5 +1,3 @@
-"""Local ADK runner client."""
-
 import asyncio
 import threading
 
@@ -10,8 +8,6 @@ from agent import AGENT_APP_NAME, build_agent, build_session_service
 
 
 class LocalRunnerAgentClient:
-    """Small adapter that gives the local ADK runner a consistent interface."""
-
     def __init__(self):
         self.app_name = AGENT_APP_NAME
         self._loop = asyncio.new_event_loop()

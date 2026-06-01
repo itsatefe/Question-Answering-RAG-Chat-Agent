@@ -1,5 +1,3 @@
-"""Agent construction utilities for the research paper Q&A agent."""
-
 from google.adk.agents import Agent
 
 from config import SESSION_DB_ECHO, SESSION_SERVICE_URI

@@ -1,5 +1,3 @@
-"""Interactive terminal chat with the research Q&A agent."""
-
 from agent_client import create_agent_client
 from config import USER_ID
 from session_utils import create_session, send_message

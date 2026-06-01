@@ -1,5 +1,3 @@
-"""Environment-backed configuration."""
-
 import logging
 import os
 from pathlib import Path
@@ -30,7 +28,6 @@ def _get_bool(name: str, default: bool = False) -> bool:
 
 
 def _normalize_postgres_uri(uri: str) -> str:
-    """Ensure PostgreSQL URIs use an async-compatible SQLAlchemy driver."""
     if not uri:
         return ""
     parsed = urlsplit(uri)

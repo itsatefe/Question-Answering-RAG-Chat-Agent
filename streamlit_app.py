@@ -1,5 +1,3 @@
-"""Streamlit UI — Research Paper Q&A Agent with document management."""
-
 from pathlib import Path
 
 import streamlit as st
@@ -16,8 +14,6 @@ from rag_pipeline import (
 )
 import rag_pipeline
 from session_utils import create_session, send_message
-
-# ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
     page_title="Research Q&A Agent",
@@ -38,7 +34,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Session state ─────────────────────────────────────────────────────────────
 
 def _init():
     if "agent_client" not in st.session_state:
@@ -59,12 +54,9 @@ def _init():
 
 _init()
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-
 with st.sidebar:
     st.title("📚 Document Library")
 
-    # ── Document list ─────────────────────────────────────────────────────────
     pdf_files = sorted(DOCUMENTS_DIR.glob("*.pdf"))
 
     if pdf_files:
@@ -86,7 +78,6 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Upload ────────────────────────────────────────────────────────────────
     st.subheader("Upload PDF")
     uploaded = st.file_uploader(
         "Drop a research paper here",
@@ -112,7 +103,6 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Index management ──────────────────────────────────────────────────────
     with st.expander("Index management"):
         store_exists = VECTOR_STORE_DIR.exists()
         st.caption(f"Vector store: {'✅ exists' if store_exists else '❌ not built'}")
@@ -132,7 +122,6 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Session controls ──────────────────────────────────────────────────────
     if st.button("🔄 New conversation", use_container_width=True):
         st.session_state.session_id = create_session(
             st.session_state.agent_client,
@@ -143,14 +132,12 @@ with st.sidebar:
 
     st.caption(f"Session `{st.session_state.session_id}`")
 
-# ── Main: Chat ────────────────────────────────────────────────────────────────
 
 st.title("Research Paper Q&A")
 st.caption("Ask anything about the documents in your library. The agent will search and cite sources.")
 
 
 def _render_sources(sources: list):
-    """Render retrieved chunks as proof that RAG fired (not Gemini's memory)."""
     if not sources:
         return
     with st.expander(f"📎 {len(sources)} source excerpt(s) retrieved from the paper"):
@@ -190,7 +177,6 @@ if prompt := st.chat_input("Ask about your research papers…"):
             )
         st.markdown(response or "_No response from agent._")
 
-    # Capture the chunks that search_documents retrieved for this turn.
     sources = get_last_retrieved_docs()
     _render_sources(sources)
 
