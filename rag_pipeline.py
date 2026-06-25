@@ -39,8 +39,14 @@ def _chunk_documents(docs):
     return chunks
 
 
+_embeddings = None
+
+
 def _get_embeddings():
-    return HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    return _embeddings
 
 
 def build_vector_store():
@@ -126,7 +132,7 @@ def rebuild_index() -> None:
     build_vector_store()
 
 
-def get_retriever(k: int = 4):
+def get_retriever(k: int = 8):
     if not VECTOR_STORE_DIR.exists():
         print("Vector store not found — building it now...")
         build_vector_store()

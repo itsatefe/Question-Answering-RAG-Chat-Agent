@@ -8,6 +8,7 @@ Run with:
 
 import json
 import asyncio
+from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -22,11 +23,28 @@ from rag_pipeline import (
     delete_document,
     get_index_stats,
     rebuild_index,
+    _get_embeddings,
 )
 from session_utils import create_session
 from config import USER_ID
 
-app = FastAPI(title="RAG Agent API")
+try:
+    from google.adk.errors.session_not_found_error import SessionNotFoundError
+except ImportError:
+    SessionNotFoundError = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop = asyncio.get_event_loop()
+    # Load embedding model and agent client in background threads so the
+    # server is fully ready before the first request arrives.
+    await loop.run_in_executor(None, _get_embeddings)
+    await loop.run_in_executor(None, get_agent_client)
+    yield
+
+
+app = FastAPI(title="RAG Agent API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,21 +94,29 @@ async def _stream_agent(session_id: str, message: str) -> AsyncIterator[str]:
     Each event is either:
       data: {"type": "text", "content": "..."}
       data: {"type": "artifact", "content": "<full html string>"}
+      data: {"type": "session_reset", "session_id": "..."}
       data: {"type": "done"}
     """
     client = get_agent_client()
-    collected: list[str] = []
 
     loop = asyncio.get_event_loop()
 
-    def _sync_stream():
+    def _sync_stream(sid: str):
         return list(client.stream_query(
             user_id=USER_ID,
-            session_id=session_id,
+            session_id=sid,
             message=message,
         ))
 
-    events = await loop.run_in_executor(None, _sync_stream)
+    try:
+        events = await loop.run_in_executor(None, lambda: _sync_stream(session_id))
+    except Exception as exc:
+        if SessionNotFoundError and isinstance(exc, SessionNotFoundError):
+            new_session_id = create_session(client, user_id=USER_ID)
+            yield f"data: {json.dumps({'type': 'session_reset', 'session_id': new_session_id})}\n\n"
+            events = await loop.run_in_executor(None, lambda: _sync_stream(new_session_id))
+        else:
+            raise
 
     full_text = ""
     for event in events:

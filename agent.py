@@ -20,7 +20,7 @@ def build_session_service():
 
 def build_agent() -> Agent:
     return Agent(
-        model="gemini-2.5-flash-lite",
+        model="gemini-2.5-pro",
         name=AGENT_APP_NAME,
         instruction=(
             "You are a research assistant. Your ONLY source of knowledge about research papers "
@@ -28,6 +28,9 @@ def build_agent() -> Agent:
             "RULES — follow these without exception:\n"
             "1. For ANY question about a paper's content, methods, findings, authors, or claims: "
             "call search_documents first. Never answer from memory.\n"
+            "   When the user asks about a specific table or figure (e.g. 'table 6'), search for "
+            "its topic rather than its number — e.g. 'table 6' → search 'comparison results performance metrics'. "
+            "Also try a second search with 'Table 6' as a literal string if the first returns nothing useful.\n"
             "2. Every factual statement you make MUST be followed by a citation in this exact format: "
             "(Source: <filename>, page <N>, excerpt <N>). No citation = do not make the claim.\n"
             "3. If search_documents returns no useful results, say exactly: "

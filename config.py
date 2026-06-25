@@ -41,6 +41,10 @@ _load_env_file()
 logging.getLogger("google.genai.types").setLevel(logging.ERROR)
 logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 
+HF_TOKEN = _get("HF_TOKEN")
+if HF_TOKEN:
+    os.environ["HF_TOKEN"] = HF_TOKEN
+
 PROJECT_ID = _get("PROJECT_ID")
 LOCATION = _get("LOCATION", "us-central1")
 USER_ID = _get("USER_ID", "user_123")
