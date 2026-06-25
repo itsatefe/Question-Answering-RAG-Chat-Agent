@@ -19,6 +19,11 @@ export default function Page() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDragging = useRef<"panel" | "sidebar" | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  function handleStop() {
+    abortControllerRef.current?.abort();
+  }
 
   useEffect(() => {
     fetch("/api/session", { method: "POST" })
@@ -122,11 +127,15 @@ export default function Page() {
       { role: "assistant", text: "", artifacts: [] },
     ]);
 
+    const abort = new AbortController();
+    abortControllerRef.current = abort;
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, message: userMessage }),
+        signal: abort.signal,
       });
 
       if (!response.body) throw new Error("No response body");
@@ -182,16 +191,21 @@ export default function Page() {
           }
         }
       }
-    } catch (err) {
-      console.error(err);
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = { ...updated[updated.length - 1] };
-        last.text = "Something went wrong. Please try again.";
-        updated[updated.length - 1] = last;
-        return updated;
-      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        // user stopped — keep partial text as-is
+      } else {
+        console.error(err);
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = { ...updated[updated.length - 1] };
+          last.text = "Something went wrong. Please try again.";
+          updated[updated.length - 1] = last;
+          return updated;
+        });
+      }
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
     }
   }
@@ -334,13 +348,24 @@ export default function Page() {
               onChange={(e) => setInput(e.target.value)}
               disabled={!sessionId || loading}
             />
-            <button
-              type="submit"
-              disabled={!sessionId || loading || !input.trim()}
-              className="bg-blue-600 text-white rounded-xl px-5 py-2.5 text-sm font-medium disabled:opacity-40 hover:bg-blue-700 transition-colors"
-            >
-              Send
-            </button>
+            {loading ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="bg-red-500 text-white rounded-xl px-5 py-2.5 text-sm font-medium hover:bg-red-600 transition-colors flex items-center gap-2"
+              >
+                <span className="w-2.5 h-2.5 rounded-sm bg-white inline-block" />
+                Stop
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!sessionId || !input.trim()}
+                className="bg-blue-600 text-white rounded-xl px-5 py-2.5 text-sm font-medium disabled:opacity-40 hover:bg-blue-700 transition-colors"
+              >
+                Send
+              </button>
+            )}
           </form>
         </div>
       </div>
