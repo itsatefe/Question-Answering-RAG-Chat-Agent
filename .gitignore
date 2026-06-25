@@ -16,6 +16,10 @@ env/
 # Vector store — generated artifact, rebuild with: python rag_pipeline.py
 vector_store/
 
+# Node
+node_modules/
+.next/
+
 # IDE
 .idea/
 .vscode/

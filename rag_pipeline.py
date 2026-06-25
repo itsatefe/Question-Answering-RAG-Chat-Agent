@@ -93,6 +93,39 @@ def add_document_to_store(pdf_path: Path) -> int:
     return len(chunks)
 
 
+def list_documents() -> list:
+    return [p.name for p in sorted(DOCUMENTS_DIR.glob("*.pdf"))]
+
+
+def add_document(filename: str, content: bytes) -> int:
+    DOCUMENTS_DIR.mkdir(exist_ok=True)
+    pdf_path = DOCUMENTS_DIR / filename
+    pdf_path.write_bytes(content)
+    return add_document_to_store(pdf_path)
+
+
+def delete_document(filename: str) -> None:
+    pdf_path = DOCUMENTS_DIR / filename
+    remove_document_from_store(pdf_path)
+    if pdf_path.exists():
+        pdf_path.unlink()
+
+
+def get_index_stats() -> dict:
+    if not VECTOR_STORE_DIR.exists():
+        return {"documents": 0, "chunks": 0, "indexed": False}
+    store = _load_vector_store()
+    count = store._collection.count()
+    return {"documents": len(list_documents()), "chunks": count, "indexed": True}
+
+
+def rebuild_index() -> None:
+    import shutil
+    if VECTOR_STORE_DIR.exists():
+        shutil.rmtree(VECTOR_STORE_DIR)
+    build_vector_store()
+
+
 def get_retriever(k: int = 4):
     if not VECTOR_STORE_DIR.exists():
         print("Vector store not found — building it now...")

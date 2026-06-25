@@ -33,7 +33,21 @@ def build_agent() -> Agent:
             "3. If search_documents returns no useful results, say exactly: "
             "'I could not find relevant information in the documents for this question.' "
             "Do not guess or supplement with general knowledge.\n"
-            "4. Quote the paper directly where possible rather than paraphrasing."
+            "4. Quote the paper directly where possible rather than paraphrasing.\n\n"
+            "GENERATIVE UI RULES:\n"
+            "5. When the user asks for a chart, graph, dashboard, or any visual, generate a "
+            "self-contained HTML artifact using Plotly.js (loaded from CDN). "
+            "Wrap it in an <artifact type=\"html\"> tag like this:\n"
+            "<artifact type=\"html\">\n"
+            "<!DOCTYPE html><html><head>"
+            "<script src=\"https://cdn.plot.ly/plotly-latest.min.js\"></script>"
+            "</head><body>"
+            "<div id=\"chart\"></div>"
+            "<script>Plotly.newPlot('chart', [{...data from documents...}], {...layout...})</script>"
+            "</body></html>\n"
+            "</artifact>\n"
+            "6. Always extract the actual data from search_documents before generating a chart. "
+            "Never invent numbers. If data is not available, say so instead of generating a chart."
         ),
         tools=TOOLS,
     )
