@@ -1,15 +1,30 @@
 "use client";
 
+export interface ArtifactData {
+  type: "html" | "react";
+  content: string;
+}
+
 export interface Message {
   role: "user" | "assistant";
   text: string;
-  artifacts: string[];
+  artifacts: ArtifactData[];
 }
 
 interface ChatMessageProps {
   message: Message;
-  onArtifactClick?: (html: string) => void;
+  onArtifactClick?: (artifact: ArtifactData) => void;
 }
+
+const ARTIFACT_ICONS: Record<ArtifactData["type"], string> = {
+  react: "⚛",
+  html: "📊",
+};
+
+const ARTIFACT_LABELS: Record<ArtifactData["type"], string> = {
+  react: "React dashboard",
+  html: "Chart",
+};
 
 export function ChatMessage({ message, onArtifactClick }: ChatMessageProps) {
   const isUser = message.role === "user";
@@ -29,14 +44,17 @@ export function ChatMessage({ message, onArtifactClick }: ChatMessageProps) {
           </div>
         )}
 
-        {message.artifacts.map((html, i) => (
+        {message.artifacts.map((artifact, i) => (
           <button
             key={i}
-            onClick={() => onArtifactClick?.(html)}
+            onClick={() => onArtifactClick?.(artifact)}
             className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 text-xs text-gray-600 transition-colors"
           >
-            <span>📊</span>
-            <span>Artifact {message.artifacts.length > 1 ? i + 1 : ""}</span>
+            <span>{ARTIFACT_ICONS[artifact.type]}</span>
+            <span>
+              {ARTIFACT_LABELS[artifact.type]}
+              {message.artifacts.length > 1 ? ` ${i + 1}` : ""}
+            </span>
             <span className="text-gray-400">— click to view</span>
           </button>
         ))}

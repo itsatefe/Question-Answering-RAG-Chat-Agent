@@ -127,18 +127,19 @@ async def _stream_agent(session_id: str, message: str) -> AsyncIterator[str]:
             if text:
                 full_text += text
 
-    # Parse artifacts out of the full response
-    # Agent wraps generated HTML in: <artifact type="html">...</artifact>
+    # Parse artifacts out of the full response.
+    # Agent wraps content in: <artifact type="react">...</artifact>
+    # or legacy:              <artifact type="html">...</artifact>
     import re
-    artifact_pattern = re.compile(r"<artifact[^>]*>(.*?)</artifact>", re.DOTALL)
-    artifacts = artifact_pattern.findall(full_text)
+    artifact_pattern = re.compile(r'<artifact\s+type=["\']?(\w+)["\']?>(.*?)</artifact>', re.DOTALL)
+    artifacts = [(m.group(1), m.group(2).strip()) for m in artifact_pattern.finditer(full_text)]
     clean_text = artifact_pattern.sub("", full_text).strip()
 
     if clean_text:
         yield f"data: {json.dumps({'type': 'text', 'content': clean_text})}\n\n"
 
-    for artifact_html in artifacts:
-        yield f"data: {json.dumps({'type': 'artifact', 'content': artifact_html.strip()})}\n\n"
+    for artifact_type, artifact_content in artifacts:
+        yield f"data: {json.dumps({'type': 'artifact', 'artifactType': artifact_type, 'content': artifact_content})}\n\n"
 
     yield f"data: {json.dumps({'type': 'done'})}\n\n"
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, FormEvent, ChangeEvent } from "react";
-import { ChatMessage, Message } from "./components/ChatMessage";
+import { ChatMessage, Message, ArtifactData } from "./components/ChatMessage";
 import { Artifact } from "./components/Artifact";
 
 export default function Page() {
@@ -11,7 +11,7 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [activeArtifact, setActiveArtifact] = useState<string | null>(null);
+  const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
   const [artifactView, setArtifactView] = useState<"preview" | "source">("preview");
   const [panelWidth, setPanelWidth] = useState(55); // left panel % of total width
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -159,6 +159,7 @@ export default function Page() {
 
           const event = JSON.parse(raw) as {
             type: "text" | "artifact" | "done" | "session_reset";
+            artifactType?: string;
             content?: string;
             session_id?: string;
           };
@@ -178,13 +179,16 @@ export default function Page() {
           }
 
           if (event.type === "artifact" && event.content) {
-            const html = event.content;
-            setActiveArtifact(html);
+            const artifact: ArtifactData = {
+              type: (event.artifactType === "html" ? "html" : "react") as ArtifactData["type"],
+              content: event.content,
+            };
+            setActiveArtifact(artifact);
             setArtifactView("preview");
             setMessages((prev) => {
               const updated = [...prev];
               const last = { ...updated[updated.length - 1] };
-              last.artifacts = [...last.artifacts, html];
+              last.artifacts = [...last.artifacts, artifact];
               updated[updated.length - 1] = last;
               return updated;
             });
@@ -298,7 +302,7 @@ export default function Page() {
               <div>
                 <h1 className="text-lg font-semibold">Research Q&A Agent</h1>
                 <p className="text-xs text-gray-500">
-                  Ask questions about your documents — or ask for a chart
+                  Ask questions about your documents — or request any visual
                 </p>
               </div>
             </div>
@@ -316,7 +320,7 @@ export default function Page() {
                 <p>Upload a PDF in the sidebar, then ask questions here.</p>
                 <p className="mt-2 text-xs">
                   Try: <em>"Summarize the key findings"</em> or{" "}
-                  <em>"Generate a bar chart of the results table"</em>
+                  <em>"Create an interactive dashboard of the results"</em>
                 </p>
               </div>
             )}
@@ -343,7 +347,7 @@ export default function Page() {
           >
             <input
               className="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              placeholder="Ask a question or request a chart…"
+              placeholder="Ask a question or request a dashboard…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={!sessionId || loading}
@@ -406,20 +410,31 @@ export default function Page() {
                 Source
               </button>
             </div>
-            <button
-              onClick={() => setActiveArtifact(null)}
-              className="text-gray-400 hover:text-gray-600 text-xs"
-              title="Close artifact panel"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-2">
+              {artifactView === "source" && (
+                <button
+                  onClick={() => navigator.clipboard.writeText(activeArtifact.content)}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
+                  title="Copy source to clipboard"
+                >
+                  Copy
+                </button>
+              )}
+              <button
+                onClick={() => setActiveArtifact(null)}
+                className="text-gray-400 hover:text-gray-600 text-xs"
+                title="Close artifact panel"
+              >
+                ✕
+              </button>
+            </div>
           </div>
           <div className="flex-1 min-h-0">
             {artifactView === "preview" ? (
-              <Artifact html={activeArtifact} />
+              <Artifact artifact={activeArtifact} />
             ) : (
               <pre className="h-full overflow-auto p-4 text-xs font-mono text-gray-800 bg-gray-50 leading-relaxed whitespace-pre-wrap break-all">
-                {activeArtifact}
+                {activeArtifact.content}
               </pre>
             )}
           </div>
