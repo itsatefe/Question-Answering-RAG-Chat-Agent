@@ -88,17 +88,26 @@ class ChatRequest(BaseModel):
     message: str
 
 
+def _openai_chunk(content: str) -> str:
+    """Wraps a text chunk in an OpenAI-compatible SSE event."""
+    payload = {
+        "id": "chatcmpl-rag",
+        "object": "chat.completion.chunk",
+        "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
+    }
+    return f"data: {json.dumps(payload)}\n\n"
+
+
 async def _stream_agent(session_id: str, message: str) -> AsyncIterator[str]:
     """
-    Yields Server-Sent Events.
-    Each event is either:
-      data: {"type": "text", "content": "..."}
-      data: {"type": "artifact", "content": "<full html string>"}
-      data: {"type": "session_reset", "session_id": "..."}
-      data: {"type": "done"}
+    Yields OpenAI-compatible Server-Sent Events so the frontend can use
+    openAIAdapter() from @openuidev/react-headless directly.
+
+      data: {"id":...,"object":"chat.completion.chunk","choices":[{"delta":{"content":"..."}}]}
+      data: {"type": "session_reset", "session_id": "..."}   (non-standard, handled separately)
+      data: [DONE]
     """
     client = get_agent_client()
-
     loop = asyncio.get_event_loop()
 
     def _sync_stream(sid: str):
@@ -127,21 +136,10 @@ async def _stream_agent(session_id: str, message: str) -> AsyncIterator[str]:
             if text:
                 full_text += text
 
-    # Parse artifacts out of the full response.
-    # Agent wraps content in: <artifact type="react">...</artifact>
-    # or legacy:              <artifact type="html">...</artifact>
-    import re
-    artifact_pattern = re.compile(r'<artifact\s+type=["\']?(\w+)["\']?>(.*?)</artifact>', re.DOTALL)
-    artifacts = [(m.group(1), m.group(2).strip()) for m in artifact_pattern.finditer(full_text)]
-    clean_text = artifact_pattern.sub("", full_text).strip()
+    if full_text:
+        yield _openai_chunk(full_text)
 
-    if clean_text:
-        yield f"data: {json.dumps({'type': 'text', 'content': clean_text})}\n\n"
-
-    for artifact_type, artifact_content in artifacts:
-        yield f"data: {json.dumps({'type': 'artifact', 'artifactType': artifact_type, 'content': artifact_content})}\n\n"
-
-    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+    yield "data: [DONE]\n\n"
 
 
 @app.post("/api/chat")

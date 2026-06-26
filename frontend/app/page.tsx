@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, FormEvent, ChangeEvent } from "react";
-import { ChatMessage, Message, ArtifactData } from "./components/ChatMessage";
-import { Artifact } from "./components/Artifact";
+import { ChatMessage, Message } from "./components/ChatMessage";
+import { ArtifactPanel } from "./components/ArtifactPanel";
 
 export default function Page() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -11,15 +11,17 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [activeArtifact, setActiveArtifact] = useState<ArtifactData | null>(null);
-  const [artifactView, setArtifactView] = useState<"preview" | "source">("preview");
-  const [panelWidth, setPanelWidth] = useState(55); // left panel % of total width
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(256); // px
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  // active panel: index of the assistant message shown in the right panel
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [panelWidth, setPanelWidth] = useState(45); // right panel % of total width
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDragging = useRef<"panel" | "sidebar" | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const activeMessage = activeIndex !== null ? messages[activeIndex] : null;
 
   function handleStop() {
     abortControllerRef.current?.abort();
@@ -37,24 +39,24 @@ export default function Page() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handlePanelDividerMouseDown = useCallback((e: React.MouseEvent) => {
-    isDragging.current = "panel";
+  const handleSidebarDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = "sidebar";
     e.preventDefault();
   }, []);
 
-  const handleSidebarDividerMouseDown = useCallback((e: React.MouseEvent) => {
-    isDragging.current = "sidebar";
+  const handlePanelDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = "panel";
     e.preventDefault();
   }, []);
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
       if (!isDragging.current) return;
-      if (isDragging.current === "panel") {
-        const pct = (e.clientX / window.innerWidth) * 100;
-        setPanelWidth(Math.min(80, Math.max(20, pct)));
-      } else if (isDragging.current === "sidebar") {
+      if (isDragging.current === "sidebar") {
         setSidebarWidth(Math.min(480, Math.max(160, e.clientX)));
+      } else if (isDragging.current === "panel") {
+        const pct = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
+        setPanelWidth(Math.min(75, Math.max(25, pct)));
       }
     }
     function onMouseUp() {
@@ -104,28 +106,26 @@ export default function Page() {
 
   async function handleDelete(filename: string) {
     if (!confirm(`Delete "${filename}" from the library?`)) return;
-    await fetch(`/api/documents/${encodeURIComponent(filename)}`, {
-      method: "DELETE",
-    });
+    await fetch(`/api/documents/${encodeURIComponent(filename)}`, { method: "DELETE" });
     await fetchDocuments();
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || !sessionId || loading) return;
-
-    const userMessage = input.trim();
+  async function sendMessage(userMessage: string) {
+    if (!userMessage.trim() || !sessionId || loading) return;
     setInput("");
     setLoading(true);
 
+    // Index of the assistant message we're about to add
+    const assistantIndex = messages.length + 1;
+
     setMessages((prev) => [
       ...prev,
-      { role: "user", text: userMessage, artifacts: [] },
+      { role: "user", text: userMessage },
+      { role: "assistant", text: "", isStreaming: true },
     ]);
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", text: "", artifacts: [] },
-    ]);
+    setActiveIndex(assistantIndex);
+
+    setLoading(true);
 
     const abort = new AbortController();
     abortControllerRef.current = abort;
@@ -155,40 +155,29 @@ export default function Page() {
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
-          if (!raw) continue;
+          if (!raw || raw === "[DONE]") continue;
 
-          const event = JSON.parse(raw) as {
-            type: "text" | "artifact" | "done" | "session_reset";
-            artifactType?: string;
-            content?: string;
-            session_id?: string;
-          };
+          let event: Record<string, unknown>;
+          try {
+            event = JSON.parse(raw);
+          } catch {
+            continue;
+          }
 
-          if (event.type === "session_reset" && event.session_id) {
+          // Session reset (non-standard event from our backend)
+          if (event.type === "session_reset" && typeof event.session_id === "string") {
             setSessionId(event.session_id);
+            continue;
           }
 
-          if (event.type === "text") {
+          // OpenAI-compatible chunk
+          const choices = event.choices as Array<{ delta?: { content?: string } }> | undefined;
+          const content = choices?.[0]?.delta?.content;
+          if (content) {
             setMessages((prev) => {
               const updated = [...prev];
               const last = { ...updated[updated.length - 1] };
-              last.text = (last.text ?? "") + event.content;
-              updated[updated.length - 1] = last;
-              return updated;
-            });
-          }
-
-          if (event.type === "artifact" && event.content) {
-            const artifact: ArtifactData = {
-              type: (event.artifactType === "html" ? "html" : "react") as ArtifactData["type"],
-              content: event.content,
-            };
-            setActiveArtifact(artifact);
-            setArtifactView("preview");
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = { ...updated[updated.length - 1] };
-              last.artifacts = [...last.artifacts, artifact];
+              last.text = (last.text ?? "") + content;
               updated[updated.length - 1] = last;
               return updated;
             });
@@ -211,15 +200,29 @@ export default function Page() {
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = { ...updated[updated.length - 1] };
+        if (last.role === "assistant") {
+          last.isStreaming = false;
+          updated[updated.length - 1] = last;
+        }
+        return updated;
+      });
     }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    sendMessage(input.trim());
   }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* ── Left panel: sidebar + chat ── */}
+      {/* ── Left block: sidebar + chat ── */}
       <div
         className="flex flex-shrink-0 min-w-0"
-        style={{ width: activeArtifact ? `${panelWidth}%` : "100%" }}
+        style={{ width: activeMessage ? `${100 - panelWidth}%` : "100%" }}
       >
         {/* Sidebar */}
         {sidebarOpen && (
@@ -276,7 +279,6 @@ export default function Page() {
               </button>
             </div>
 
-            {/* Sidebar resize handle */}
             <div
               onMouseDown={handleSidebarDividerMouseDown}
               className="absolute top-0 right-0 w-1 h-full hover:bg-blue-400 active:bg-blue-500 cursor-col-resize transition-colors"
@@ -285,7 +287,7 @@ export default function Page() {
           </aside>
         )}
 
-        {/* Chat area */}
+        {/* Chat */}
         <div className="flex flex-col flex-1 min-w-0">
           <header className="py-4 px-6 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -307,9 +309,7 @@ export default function Page() {
               </div>
             </div>
             {sessionId && (
-              <span className="text-xs text-gray-400 font-mono">
-                {sessionId.slice(0, 8)}…
-              </span>
+              <span className="text-xs text-gray-400 font-mono">{sessionId.slice(0, 8)}…</span>
             )}
           </header>
 
@@ -328,16 +328,10 @@ export default function Page() {
               <ChatMessage
                 key={i}
                 message={m}
-                onArtifactClick={setActiveArtifact}
+                isActive={i === activeIndex}
+                onViewClick={() => setActiveIndex(i)}
               />
             ))}
-            {loading && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-gray-400">
-                  Thinking…
-                </div>
-              </div>
-            )}
             <div ref={bottomRef} />
           </div>
 
@@ -374,8 +368,8 @@ export default function Page() {
         </div>
       </div>
 
-      {/* ── Draggable divider ── */}
-      {activeArtifact && (
+      {/* ── Drag divider ── */}
+      {activeMessage && (
         <div
           onMouseDown={handlePanelDividerMouseDown}
           className="w-1 flex-shrink-0 bg-gray-200 hover:bg-blue-400 active:bg-blue-500 cursor-col-resize transition-colors"
@@ -383,61 +377,15 @@ export default function Page() {
         />
       )}
 
-      {/* ── Right panel: artifact ── */}
-      {activeArtifact && (
-        <div className="flex-1 flex flex-col min-w-0 border-l border-gray-200 bg-white">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 flex-shrink-0">
-            {/* Preview / Source toggle */}
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-              <button
-                onClick={() => setArtifactView("preview")}
-                className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                  artifactView === "preview"
-                    ? "bg-white text-gray-800 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Preview
-              </button>
-              <button
-                onClick={() => setArtifactView("source")}
-                className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                  artifactView === "source"
-                    ? "bg-white text-gray-800 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Source
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              {artifactView === "source" && (
-                <button
-                  onClick={() => navigator.clipboard.writeText(activeArtifact.content)}
-                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
-                  title="Copy source to clipboard"
-                >
-                  Copy
-                </button>
-              )}
-              <button
-                onClick={() => setActiveArtifact(null)}
-                className="text-gray-400 hover:text-gray-600 text-xs"
-                title="Close artifact panel"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0">
-            {artifactView === "preview" ? (
-              <Artifact artifact={activeArtifact} />
-            ) : (
-              <pre className="h-full overflow-auto p-4 text-xs font-mono text-gray-800 bg-gray-50 leading-relaxed whitespace-pre-wrap break-all">
-                {activeArtifact.content}
-              </pre>
-            )}
-          </div>
+      {/* ── Right panel: OpenUI renderer ── */}
+      {activeMessage && (
+        <div className="flex-1 min-w-0 flex flex-col" style={{ width: `${panelWidth}%` }}>
+          <ArtifactPanel
+            response={activeMessage.text}
+            isStreaming={activeMessage.isStreaming ?? false}
+            onClose={() => setActiveIndex(null)}
+            onSendMessage={sendMessage}
+          />
         </div>
       )}
     </div>

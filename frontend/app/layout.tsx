@@ -1,4 +1,6 @@
 import "./globals.css";
+import "@openuidev/react-ui/defaults.css";
+import "@openuidev/react-ui/index.css";
 import type { ReactNode } from "react";
 
 export const metadata = { title: "RAG Generative UI" };
